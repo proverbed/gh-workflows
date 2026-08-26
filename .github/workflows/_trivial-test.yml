@@ -1,8 +1,28 @@
 name: Trivial reusable test
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      issue_number:
+        description: 'Issue number to estimate (workflow_dispatch only)'
+        required: false
+        type: number
+      project_title:
+        description: >
+          Name (or unique substring) of the GitHub Projects v2 board to write
+          the Estimate field to. Falls back to the first project linked to
+          the calling repo if omitted or not matched.
+        required: false
+        type: string
+    secrets:
+      GH_PAT:
+        description: >
+          PAT with repo + project scopes — the default GITHUB_TOKEN cannot
+          read/write a user-level (non-org) Projects v2 board.
+        required: true
+      ANTHROPIC_API_KEY:
+        required: true
 jobs:
   hello:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "hello from reusable workflow"
+      - run: echo "hello from reusable workflow, issue_number=${{ inputs.issue_number }} project_title=${{ inputs.project_title }}"
