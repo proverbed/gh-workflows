@@ -2,11 +2,11 @@ name: Trivial reusable test
 on:
   workflow_call:
     inputs:
-      project_title:
+      issue_number:
         required: false
-        type: string
+        type: number
 jobs:
   hello:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "project_title=${{ inputs.project_title }}"
+      - run: echo "issue_number=${{ inputs.issue_number }}"
