@@ -1,12 +1,11 @@
 name: Trivial reusable test
 on:
   workflow_call:
-    inputs:
-      issue_number:
-        required: false
-        type: number
+    secrets:
+      GH_PAT:
+        required: true
 jobs:
   hello:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "issue_number=${{ inputs.issue_number }}"
+      - run: echo "hello"
