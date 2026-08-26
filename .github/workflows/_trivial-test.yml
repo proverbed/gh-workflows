@@ -16,5 +16,7 @@ on:
 jobs:
   estimate:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
-      - run: echo "inputs+secrets combined, no permissions, no if"
+      - run: echo "inputs+secrets+permissions"
