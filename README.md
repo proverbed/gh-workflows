@@ -35,6 +35,10 @@ Ported from `proverbed/tradekeys.co`'s original (non-reusable) version.
            required: true
            type: number
 
+   # Load-bearing, not optional — see "Gotchas" below.
+   permissions:
+     issues: write
+
    jobs:
      estimate:
        uses: proverbed/gh-workflows/.github/workflows/estimate-story-points.yml@main
@@ -65,3 +69,24 @@ Ported from `proverbed/tradekeys.co`'s original (non-reusable) version.
 That's the whole per-repo footprint — the ~330 lines of actual prompt/schema/
 Projects-field-resolution logic exist only in this repo, at
 `.github/workflows/estimate-story-points.yml`.
+
+### Gotchas (found the hard way — both cause a silent `startup_failure` with zero jobs created and no readable log)
+
+- **The caller must declare `permissions:` matching (or exceeding) whatever
+  the reusable workflow's job declares.** A reusable workflow's job can only
+  *narrow* the permissions available to it, never grant beyond what the
+  caller already has — declaring `permissions: issues: write` only in the
+  reusable workflow, with no matching grant in the caller, fails validation
+  before a single job is created. The caller template above already
+  includes this; if you add a step to the reusable workflow that needs a
+  new permission, every consuming repo's caller needs the matching grant
+  too.
+- **Any `number`-typed input must be `string` instead if its value is ever
+  forwarded from the caller's own `workflow_dispatch` input via an
+  expression** (`${{ inputs.issue_number }}`). `workflow_dispatch` inputs
+  are always delivered as strings at runtime regardless of their declared
+  type — a literal number in `with:` works fine, but forwarding a
+  caller-side numeric input through an expression into a reusable
+  workflow's `number`-typed input fails. `issue_number` is `type: string`
+  in this workflow for exactly this reason, even though it's numeric — the
+  script only ever interpolates it into bash/`gh` calls, never arithmetic.
