@@ -45,13 +45,8 @@ on:
 
 jobs:
   estimate:
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && github.event.action == 'opened') ||
-      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'estimate') ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/estimate'))
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
-      - run: echo "made it past the if condition"
+      - run: echo "no if condition, just permissions"
