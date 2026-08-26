@@ -9,6 +9,16 @@ name: Estimate Story Points (reusable)
 # variable, since `vars` context in a reusable workflow only sees ITS OWN
 # repo's variables, not the caller's — every consuming repo differs on which
 # project it targets, so that value must be passed explicitly.
+#
+# issue_number is `type: string`, not `number`, even though it's numeric —
+# workflow_dispatch inputs are always delivered as strings at runtime
+# regardless of declared type, and forwarding that string through
+# `${{ inputs.issue_number }}` into a reusable workflow's `number`-typed
+# input fails GitHub's workflow-file validation (confirmed live: a literal
+# `2` passes, the same value forwarded via expression from the caller's own
+# workflow_dispatch input does not — a startup_failure with zero jobs
+# created, no readable log). The script only ever interpolates this into
+# bash/`gh` calls, never does arithmetic on it, so string is correct anyway.
 
 on:
   workflow_call:
@@ -16,7 +26,7 @@ on:
       issue_number:
         description: 'Issue number to estimate (workflow_dispatch only)'
         required: false
-        type: number
+        type: string
       project_title:
         description: >
           Name (or unique substring) of the GitHub Projects v2 board to write
