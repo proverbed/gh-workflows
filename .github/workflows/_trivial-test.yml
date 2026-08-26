@@ -1,52 +1,20 @@
 name: Trivial reusable test
-
-# Reusable workflow — the canonical implementation lives HERE only. Consuming
-# repos get a ~15-line caller (see README.md) that declares the real triggers
-# (issues/issue_comment/workflow_dispatch) and forwards them via `uses:`.
-#
-# Ported from proverbed/tradekeys.co's .github/workflows/estimate-story-points.yml,
-# generalized to take PROJECT_TITLE as an input instead of a hardcoded repo
-# variable, since `vars` context in a reusable workflow only sees ITS OWN
-# repo's variables, not the caller's — every consuming repo differs on which
-# project it targets, so that value must be passed explicitly.
-#
-# issue_number is `type: string`, not `number`, even though it's numeric —
-# workflow_dispatch inputs are always delivered as strings at runtime
-# regardless of declared type, and forwarding that string through
-# `${{ inputs.issue_number }}` into a reusable workflow's `number`-typed
-# input fails GitHub's workflow-file validation (confirmed live: a literal
-# `2` passes, the same value forwarded via expression from the caller's own
-# workflow_dispatch input does not — a startup_failure with zero jobs
-# created, no readable log). The script only ever interpolates this into
-# bash/`gh` calls, never does arithmetic on it, so string is correct anyway.
-
 on:
   workflow_call:
     inputs:
       issue_number:
-        description: 'Issue number to estimate (workflow_dispatch only)'
         required: false
         type: string
       project_title:
-        description: >
-          Name (or unique substring) of the GitHub Projects v2 board to write
-          the Estimate field to. Falls back to the first project linked to
-          the calling repo if omitted or not matched.
         required: false
         type: string
     secrets:
       GH_PAT:
-        description: >
-          PAT with repo + project scopes — the default GITHUB_TOKEN cannot
-          read/write a user-level (non-org) Projects v2 board.
         required: true
       ANTHROPIC_API_KEY:
         required: true
-
 jobs:
   estimate:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
     steps:
-      - run: echo "no if condition, just permissions"
+      - run: echo "inputs+secrets combined, no permissions, no if"
