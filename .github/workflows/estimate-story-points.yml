@@ -34,14 +34,32 @@ on:
           the calling repo if omitted or not matched.
         required: false
         type: string
+      runs_on:
+        description: >
+          Runner label for the job. Defaults to GitHub-hosted ubuntu-latest;
+          pass a self-hosted label (e.g. agentic-ci) to keep the estimate off
+          hosted Actions minutes.
+        required: false
+        type: string
+        default: ubuntu-latest
     secrets:
       GH_PAT:
         description: >
           PAT with repo + project scopes — the default GITHUB_TOKEN cannot
           read/write a user-level (non-org) Projects v2 board.
         required: true
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: >
+          Claude subscription token from `claude setup-token`. Optional at the
+          interface only so a caller that forgets it gets a readable error from
+          the estimate step instead of a silent startup_failure.
+        required: false
       ANTHROPIC_API_KEY:
-        required: true
+        description: >
+          Deprecated and unused — kept declared only because existing callers
+          still pass it, and passing an undeclared secret is a startup_failure.
+          Remove once every caller has dropped it.
+        required: false
 
 jobs:
   estimate:
@@ -50,7 +68,7 @@ jobs:
       (github.event_name == 'issues' && github.event.action == 'opened') ||
       (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'estimate') ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/estimate'))
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     permissions:
       issues: write
 
@@ -112,7 +130,7 @@ jobs:
           - Ambiguity: How well-defined are the requirements?
           - Risk: Edge cases, security concerns, migration steps, cross-system dependencies?
 
-          The response shape is enforced by the API. Keep the justification to one line.
+          The response shape is enforced by a JSON schema. Keep the justification to one line.
           PROMPT_EOF
           )
 
@@ -127,57 +145,64 @@ jobs:
           ESCAPED=$(echo "$FULL_PROMPT" | jq -Rsa .)
           echo "prompt=${ESCAPED}" >> "$GITHUB_OUTPUT"
 
-      - name: Call Anthropic Messages API
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Runs on the Claude subscription (CLAUDE_CODE_OAUTH_TOKEN, from
+      # `claude setup-token`) rather than a Console API key, so estimates draw
+      # on the plan instead of a separately billed credit balance that ran dry
+      # unnoticed for five days.
+      - name: Estimate with Claude Code
         id: llm
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           PROMPT: ${{ steps.issue.outputs.prompt }}
+          CLAUDE_CODE_VERSION: 2.1.291
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::ANTHROPIC_API_KEY secret is not set"
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN secret is not set — run \`claude setup-token\` and save the token as a repo secret"
             exit 1
           fi
 
-          REQUEST=$(jq -n --argjson prompt "$PROMPT" '{
-            model: "claude-haiku-4-5",
-            max_tokens: 512,
-            messages: [{ role: "user", content: $prompt }],
-            output_config: {
-              format: {
-                type: "json_schema",
-                schema: {
-                  type: "object",
-                  properties: {
-                    points: { type: "integer", enum: [1, 2, 3, 5, 8, 13] },
-                    justification: { type: "string" },
-                    scope: { type: "string" },
-                    complexity: { type: "string", enum: ["low", "medium", "high"] },
-                    ambiguity: { type: "string", enum: ["low", "medium", "high"] },
-                    risk: { type: "string", enum: ["low", "medium", "high"] }
-                  },
-                  required: ["points", "justification", "scope", "complexity", "ambiguity", "risk"],
-                  additionalProperties: false
-                }
-              }
-            }
-          }')
+          # --json-schema pins the response to this schema, so the model cannot
+          # return prose, code fences, or an off-scale point value.
+          SCHEMA='{
+            "type": "object",
+            "properties": {
+              "points": { "type": "integer", "enum": [1, 2, 3, 5, 8, 13] },
+              "justification": { "type": "string" },
+              "scope": { "type": "string" },
+              "complexity": { "type": "string", "enum": ["low", "medium", "high"] },
+              "ambiguity": { "type": "string", "enum": ["low", "medium", "high"] },
+              "risk": { "type": "string", "enum": ["low", "medium", "high"] }
+            },
+            "required": ["points", "justification", "scope", "complexity", "ambiguity", "risk"],
+            "additionalProperties": false
+          }'
 
-          RESPONSE=$(curl -s "https://api.anthropic.com/v1/messages" \
-            -H "Content-Type: application/json" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-            -d "$REQUEST")
+          # No tools, no settings, no MCP: the issue body is untrusted input and
+          # the only thing this call may do is answer.
+          RESPONSE=$(echo "$PROMPT" | jq -r . | npx --yes "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" -p \
+            --model claude-haiku-4-5 \
+            --output-format json \
+            --json-schema "$SCHEMA" \
+            --tools "" \
+            --setting-sources "" \
+            --strict-mcp-config \
+            --no-session-persistence) || true
 
-          TEXT=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
+          TEXT=$(echo "$RESPONSE" | jq -c '.structured_output // empty' 2>/dev/null)
 
-          if [ -z "$TEXT" ]; then
-            echo "::error::Anthropic API returned no content (stop_reason: $(echo "$RESPONSE" | jq -r '.stop_reason // "none"'))"
-            echo "$RESPONSE" | jq .
+          if [ -z "$TEXT" ] || [ "$(echo "$RESPONSE" | jq -r '.is_error // false' 2>/dev/null)" = "true" ]; then
+            echo "::error::Claude Code returned no structured estimate"
+            echo "$RESPONSE"
             exit 1
           fi
 
           echo "response=${TEXT}" >> "$GITHUB_OUTPUT"
 
+          # Parse the points value
           POINTS=$(echo "$TEXT" | jq -r '.points // empty')
           if [ -z "$POINTS" ]; then
             echo "::error::Could not parse points from response: ${TEXT}"

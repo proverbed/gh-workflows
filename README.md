@@ -8,7 +8,7 @@ configuration.
 ## estimate-story-points.yml
 
 Auto-estimates a GitHub issue on the Fibonacci scale (1/2/3/5/8/13) using
-Claude Haiku, writes the value into a GitHub Projects v2 "Estimate" field,
+Claude Haiku (via Claude Code on the Claude subscription), writes the value into a GitHub Projects v2 "Estimate" field,
 and posts a one-line justification comment. Triggers: issue opened, an
 `estimate` label added, an issue comment containing `/estimate`, or manual
 dispatch with an issue number.
@@ -48,9 +48,12 @@ Ported from `proverbed/tradekeys.co`'s original (non-reusable) version.
          # Estimate field to. Omit to fall back to the first project linked
          # to this repo.
          project_title: "TradeBotMonitor"
+         # Optional. Defaults to ubuntu-latest; pass a self-hosted label to
+         # keep the estimate off hosted Actions minutes.
+         # runs_on: agentic-ci
        secrets:
          GH_PAT: ${{ secrets.GH_PAT }}
-         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
    ```
 
 2. Set two repo secrets (Settings → Secrets and variables → Actions) —
@@ -59,8 +62,15 @@ Ported from `proverbed/tradekeys.co`'s original (non-reusable) version.
    - `GH_PAT` — a personal access token with `repo` + `project` scopes. The
      default `GITHUB_TOKEN` cannot read/write a user-level (non-org)
      Projects v2 board.
-   - `ANTHROPIC_API_KEY` — an Anthropic API key (separate from any Claude
-     Code subscription — this calls the Messages API directly).
+   - `CLAUDE_CODE_OAUTH_TOKEN` — a Claude subscription token from
+     `claude setup-token`. The estimate runs through Claude Code, so it draws
+     on the plan's usage limits rather than a separately billed Console credit
+     balance (which ran dry unnoticed in October 2026). A usage-limit hold
+     pauses estimates too.
+
+   `ANTHROPIC_API_KEY` is no longer used. The reusable workflow still declares
+   it as an optional secret so older callers that pass it keep validating;
+   drop it from your caller.
 
 3. Make sure the target Projects v2 board has a field literally named
    `Estimate` (any type — `SINGLE_SELECT` with numeric-string options, or
