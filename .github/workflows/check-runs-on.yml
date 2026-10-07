@@ -1,0 +1,17 @@
+name: Check runs-on contract
+
+# Fails a change that stops any reusable workflow here from honouring its
+# `runs_on` input. See scripts/check-runs-on.sh for why callers depend on it.
+# This repo is public, so these hosted minutes are free.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-runs-on.sh
