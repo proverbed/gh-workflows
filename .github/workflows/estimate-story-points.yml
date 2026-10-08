@@ -54,12 +54,6 @@ on:
           interface only so a caller that forgets it gets a readable error from
           the estimate step instead of a silent startup_failure.
         required: false
-      ANTHROPIC_API_KEY:
-        description: >
-          Deprecated and unused — kept declared only because existing callers
-          still pass it, and passing an undeclared secret is a startup_failure.
-          Remove once every caller has dropped it.
-        required: false
 
 jobs:
   estimate:
