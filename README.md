@@ -68,9 +68,8 @@ Ported from `proverbed/tradekeys.co`'s original (non-reusable) version.
      balance (which ran dry unnoticed in October 2026). A usage-limit hold
      pauses estimates too.
 
-   `ANTHROPIC_API_KEY` is no longer used. The reusable workflow still declares
-   it as an optional secret so older callers that pass it keep validating;
-   drop it from your caller.
+   Do not pass `ANTHROPIC_API_KEY`. It is no longer declared, and passing a
+   secret the reusable workflow does not declare is a silent `startup_failure`.
 
 3. Make sure the target Projects v2 board has a field literally named
    `Estimate` (any type — `SINGLE_SELECT` with numeric-string options, or
